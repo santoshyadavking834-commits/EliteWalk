@@ -1,13 +1,11 @@
-name: EliteWalk CI Pipeline
+name: EliteWalk Frontend Deploy
 
 on:
   push:
     branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +17,7 @@ jobs:
         with:
           node-version: 18
 
-      # ---------- Client ----------
+      # -------- Build Frontend --------
       - name: Install client dependencies
         working-directory: client
         run: npm install
@@ -28,11 +26,22 @@ jobs:
         working-directory: client
         run: npm run build
 
-      # ---------- Server ----------
-      - name: Install server dependencies
-        working-directory: server
-        run: npm install
+      # -------- Copy build to EC2 --------
+      - name: Copy build files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "client/build/*"
+          target: "/var/www/html"
 
-      - name: Server check
-        working-directory: server
-        run: npm test || echo "No tests found"
+      # -------- Restart Nginx --------
+      - name: Restart Nginx
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo systemctl restart nginx
